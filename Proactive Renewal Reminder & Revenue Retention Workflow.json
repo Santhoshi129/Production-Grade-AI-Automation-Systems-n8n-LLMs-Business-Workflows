@@ -1,0 +1,399 @@
+{
+  "name": "Proactive Renewal Reminder & Revenue Retention Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "3e4c0d14-782d-4c2d-9ea4-cde1a242711d",
+      "name": "Schedule Daily at 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        -1024,
+        448
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {},
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "39fae548-cd80-45bb-8e41-f05bbc0662f3",
+      "name": "Fetch Contacts from GoHighLevel",
+      "type": "n8n-nodes-base.highLevel",
+      "position": [
+        -800,
+        448
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "58341a8d-2417-47e1-b29b-be575b270c35",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.customFields }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "023fbda0-5ff0-4453-8d6f-a55e823f9207",
+      "name": "Check Has Custom Fields",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -576,
+        448
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get current date at midnight for accurate day comparison\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\n// Array to store filtered contacts\nconst filteredContacts = [];\n\n// Process each contact from input\nfor (const contact of $input.all()) {\n  const item = contact.json;\n  \n  // Check if contact has customFields\n  if (!item.customFields || !Array.isArray(item.customFields)) {\n    continue;\n  }\n  \n  // TODO: Replace with YOUR custom field ID for Contract End Date\n  const contractEndField = item.customFields.find(\n    field => field.id === 'YOUR_CONTRACT_END_DATE_FIELD_ID'\n  );\n  \n  // Skip if no contract end date exists\n  if (!contractEndField || !contractEndField.value) {\n    continue;\n  }\n  \n  // Parse contract end date (timestamp in milliseconds)\n  const contractEndDate = new Date(contractEndField.value);\n  contractEndDate.setHours(0, 0, 0, 0);\n  \n  // Calculate days until expiry\n  const daysUntilExpiry = Math.ceil(\n    (contractEndDate - today) / (1000 * 60 * 60 * 24)\n  );\n  \n  // Filter: expires within next 10 days (0-10 days)\n  if (daysUntilExpiry >= 0 && daysUntilExpiry <= 10) {\n    \n    // TODO: Replace with YOUR custom field ID for Account Manager\n    const accountManagerField = item.customFields.find(\n      field => field.id === 'YOUR_ACCOUNT_MANAGER_FIELD_ID'\n    );\n    \n    // Format the contract end date for display\n    const formattedDate = contractEndDate.toLocaleDateString('en-US', {\n      year: 'numeric',\n      month: 'long',\n      day: 'numeric'\n    });\n    \n    // Create enriched contact object\n    filteredContacts.push({\n      json: {\n        // Original contact data\n        id: item.id,\n        contactName: item.contactName,\n        firstName: item.firstName || 'N/A',\n        lastName: item.lastName || 'N/A',\n        email: item.email || 'No email on file',\n        companyName: item.companyName || 'N/A',\n        phone: item.phone,\n        \n        // Contract information\n        contractEndDate: formattedDate,\n        contractEndDateRaw: contractEndDate.toISOString(),\n        contractEndTimestamp: contractEndField.value,\n        daysUntilExpiry: daysUntilExpiry,\n        \n        // Account manager info\n        accountManager: accountManagerField?.value || 'Unassigned',\n        \n        // Additional fields for workflow\n        allCustomFields: item.customFields,\n        tags: item.tags || [],\n        source: item.source\n      }\n    });\n  }\n}\n\n// Return filtered contacts\nreturn filteredContacts;"
+      },
+      "id": "56458327-5701-4216-9fc8-0f244936ee27",
+      "name": "Filter Renewals Code",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -352,
+        448
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.daysUntilExpiry }}",
+              "operation": "smallerEqual",
+              "value2": 10
+            }
+          ],
+          "string": [
+            {
+              "value1": "={{ $json.contractEndDate }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "8aff1bc4-b6b8-4ffb-aaa9-dab8858417f4",
+      "name": "Verify Expiring Within 10 Days",
+      "type": "n8n-nodes-base.filter",
+      "position": [
+        -128,
+        448
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Important: Your Contract Renewal is Coming Up",
+        "message": "=Hi {{ $json.firstName }} {{ $json.lastName }},\n\nThis is a friendly reminder that your contract with us is set to expire on {{ $json.contractEndDate }}.\n\nWe'd love to continue working with you! Please let us know if you'd like to discuss renewal options.\n\nYour account manager will be reaching out shortly.\n\nBest regards,\nYour Team",
+        "options": {}
+      },
+      "id": "84fee671-7605-44e2-9928-75bcf6b34f1b",
+      "name": "Send Renewal Email via Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        96,
+        352
+      ],
+      "webhookId": "c62251a2-e50a-4f59-8e3e-d35403ca9d82",
+      "typeVersion": 2.1,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "uGNsTcsVvQi2uhHJ",
+          "name": "Gmail account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_SLACK_CHANNEL_ID",
+          "cachedResultName": "Select your renewals channel"
+        },
+        "text": "=🔔 *Contract Renewal Alert*\n\n*Client:* {{ $json.firstName }} {{ $json.lastName }}\n*Email:* {{ $json.email }}\n*Company:* {{ $json.companyName || \"N/A\" }}\n*Contract Expires:* {{ $json.contractEndDate }}\n*Days Remaining:* {{ $json.daysUntilExpiry }}\n*Account Manager:* {{ $json.accountManager }}\n\n✅ Renewal email has been sent to client.\n📋 Please follow up within 3 business days.",
+        "otherOptions": {}
+      },
+      "id": "5ca81b69-7820-4277-aae7-58c3bce868f5",
+      "name": "Send Slack Alert to Team",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        96,
+        544
+      ],
+      "webhookId": "2d02c3a0-61c7-4742-b2d5-665e3ad8dab8",
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "af2e75b9-f77e-481c-b322-1230d5f3d0fc",
+      "name": "Merge Email and Slack Results",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        320,
+        448
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "jsCode": "const totalReminders = $input.all().length;\nconst timestamp = new Date().toLocaleString();\n\nreturn {\n  json: {\n    summary: `Renewal Reminder Workflow Completed`,\n    totalRemindersSent: totalReminders,\n    timestamp: timestamp,\n    message: `${totalReminders} renewal reminder(s) sent successfully on ${timestamp}`\n  }\n};"
+      },
+      "id": "5d851dae-9d00-471a-862b-a07f97c677e7",
+      "name": "Generate Summary Report",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        544,
+        448
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "cachedResultName": "Select your tracking sheet"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Sheet1",
+          "cachedResultName": "Select sheet name"
+        },
+        "columns": {
+          "value": {},
+          "schema": [
+            {
+              "id": "summary",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "summary",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "totalRemindersSent",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "totalRemindersSent",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timestamp",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "timestamp",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "message",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": []
+        },
+        "options": {}
+      },
+      "id": "5435382f-b057-4e5e-80e1-5e5bdeb823cc",
+      "name": "Log Results to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        768,
+        448
+      ],
+      "typeVersion": 4.7
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Filter Renewals Code": {
+      "main": [
+        [
+          {
+            "node": "Verify Expiring Within 10 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Daily at 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Fetch Contacts from GoHighLevel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Has Custom Fields": {
+      "main": [
+        [
+          {
+            "node": "Filter Renewals Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary Report": {
+      "main": [
+        [
+          {
+            "node": "Log Results to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Alert to Team": {
+      "main": [
+        [
+          {
+            "node": "Merge Email and Slack Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Send Renewal Email via Gmail": {
+      "main": [
+        [
+          {
+            "node": "Merge Email and Slack Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Email and Slack Results": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Expiring Within 10 Days": {
+      "main": [
+        [
+          {
+            "node": "Send Renewal Email via Gmail",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Slack Alert to Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Contacts from GoHighLevel": {
+      "main": [
+        [
+          {
+            "node": "Check Has Custom Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "378ec9b0-aa3f-415f-9eaf-b6d2a168b8f8",
+  "meta": {
+    "instanceId": "df9e926e4db944a4b8e5dbae635b7c198e7118577d93d38bd64b1952645ba4f0"
+  },
+  "id": "N1pf0RgDd67SN3aF",
+  "tags": [
+    {
+      "updatedAt": "2026-01-10T08:09:10.772Z",
+      "createdAt": "2026-01-10T08:09:10.772Z",
+      "id": "5ihMNtz0uqZDuqKC",
+      "name": "Client Success"
+    },
+    {
+      "updatedAt": "2026-01-10T06:33:32.574Z",
+      "createdAt": "2026-01-10T06:33:32.574Z",
+      "id": "8jDT2j8FrQOpgnSD",
+      "name": "Business Operations"
+    },
+    {
+      "updatedAt": "2025-12-17T11:39:35.437Z",
+      "createdAt": "2025-12-17T11:39:35.437Z",
+      "id": "S5qrQsiL9EZWx1bu",
+      "name": "Renewal Protection"
+    },
+    {
+      "updatedAt": "2025-12-17T11:39:43.074Z",
+      "createdAt": "2025-12-17T11:39:43.074Z",
+      "id": "rNmQ0Jcz5Zj6TiJW",
+      "name": "Retention"
+    }
+  ]
+}
