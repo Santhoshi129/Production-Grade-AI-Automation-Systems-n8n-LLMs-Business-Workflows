@@ -1,0 +1,550 @@
+{
+  "name": "AI-Powered Reddit Product Signal Intelligence Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "3f88faa1-ecb7-4108-a339-46376067073a",
+      "name": "When clicking \"Execute Workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [
+        -1936,
+        208
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "###  Community Signals\nInitiates the workflow and fetches newly published Reddit posts across all subreddits based on the configured keyword. This serves as the raw input layer for community signal monitoring.",
+        "height": 336,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1984,
+        48
+      ],
+      "typeVersion": 1,
+      "id": "a0eb562b-d9d6-4c5c-ba56-9d5e501a07f3",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### Signal Filtering\nFilters Reddit posts based on engagement, recency, and content availability to eliminate low-signal, outdated, or empty discussions early in the pipeline.",
+        "height": 336,
+        "width": 336
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1440,
+        48
+      ],
+      "typeVersion": 1,
+      "id": "bca2192e-1e6f-42be-821a-aef665e11b0f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "location": "allReddit",
+        "keyword": "n8n",
+        "additionalFields": {
+          "sort": "new"
+        }
+      },
+      "id": "57e4fadb-8a59-4631-ad24-7db8d10f4181",
+      "name": "Fetch Recent Reddit Discussions",
+      "type": "n8n-nodes-base.reddit",
+      "position": [
+        -1664,
+        208
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "redditOAuth2Api": {
+          "id": "ORjiMCZq13yRh3D4",
+          "name": "Reddit account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.ups }}",
+              "operation": "largerEqual",
+              "value2": "=5"
+            }
+          ],
+          "string": [
+            {
+              "value1": "={{ $json.selftext }}",
+              "operation": "isNotEmpty"
+            }
+          ],
+          "dateTime": [
+            {
+              "value1": "={{ DateTime.fromSeconds($json.created).toISO() }}",
+              "value2": "={{ $today.minus({days: 7}).toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "709cf9a0-11e7-42ef-bc93-e3af44b36637",
+      "name": "Filter High-Quality & Recent Posts",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -1328,
+        208
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "number": [
+            {
+              "name": "upvotes",
+              "value": "={{ $json.ups }}"
+            },
+            {
+              "name": "subredditSize",
+              "value": "={{ $json.subreddit_subscribers }}"
+            }
+          ],
+          "string": [
+            {
+              "name": "selftextTrimmed",
+              "value": "={{ $json.selftext.substring(0,500) }}"
+            },
+            {
+              "name": "subreddit",
+              "value": "={{ $json.subreddit }}"
+            },
+            {
+              "name": "date",
+              "value": "={{ DateTime.fromSeconds($json.created).toLocaleString() }}"
+            },
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "deb97bba-41fa-40c7-8e52-0cc94ce65328",
+      "name": "Normalize Reddit Post Data",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -960,
+        192
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Data Normalization & Field Selection\nStandardizes incoming Reddit data by extracting only relevant attributes such as subreddit, engagement metrics, timestamps, URLs, and trimmed post content.",
+        "height": 320,
+        "width": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1072,
+        48
+      ],
+      "typeVersion": 1,
+      "id": "f138e98b-fdc0-47ad-a3b1-b4c89d6f889b",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "\n**Uses an AI model to determine whether a Reddit post is genuinely related to n8n as a workflow automation platform, filtering out unrelated discussions.**",
+        "width": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -736,
+        48
+      ],
+      "typeVersion": 1,
+      "id": "b713d38c-aa48-4ef1-b024-2e17ab91495d",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {
+          "fuzzyCompare": false,
+          "includeUnpaired": true
+        }
+      },
+      "id": "667f6bc5-0309-40be-bf3c-62a3865128bb",
+      "name": "Merge Classification with Post Data",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        -352,
+        176
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.choices[0].text }}",
+              "operation": "contains",
+              "value2": "No"
+            }
+          ]
+        }
+      },
+      "id": "df59ffa0-058e-475a-bd50-0150696bf257",
+      "name": "Is Post Relevant?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -192,
+        176
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Conditional Routing\nRoutes posts based on AI classification results. Only posts confirmed to be relevant continue through the pipeline for summarization and insight generation.",
+        "height": 304,
+        "width": 352
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -400,
+        48
+      ],
+      "typeVersion": 1,
+      "id": "c264fe57-4055-4360-ac4a-a52f3916e716",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "\n**Generates a concise, human-readable summary capturing the core intent of each relevant Reddit discussion for quick consumption by stakeholders.**",
+        "width": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -16,
+        48
+      ],
+      "typeVersion": 1,
+      "id": "85cf90ed-1d75-456b-9cbf-a09204362d4d",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {
+          "fuzzyCompare": false,
+          "includeUnpaired": true
+        }
+      },
+      "id": "acef5004-6d93-46ce-85a4-bde0a5db4491",
+      "name": "Merge Summary with Metadata",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        384,
+        176
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "content": "## Insight Aggregation \nCombines AI summaries with engagement metrics and contextual metadata to form a complete, structured insight record.",
+        "height": 320,
+        "width": 272
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        288,
+        48
+      ],
+      "typeVersion": 1,
+      "id": "795eb79c-d098-40e0-bb8d-001f31b1d72f",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "number": [
+            {
+              "name": "upvotes",
+              "value": "={{ $json.upvotes }}"
+            },
+            {
+              "name": "subredditSize",
+              "value": "={{ $json.subredditSize }}"
+            }
+          ],
+          "string": [
+            {
+              "name": "subreddit",
+              "value": "={{ $json.subreddit }}"
+            },
+            {
+              "name": "bulletSummary",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "date",
+              "value": "={{ $json.date }}"
+            },
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e36243d1-7904-4152-b960-75c719136b98",
+      "name": "Prepare Final Structured Output",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        672,
+        176
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "**Produces a clean, structured dataset containing high-signal Reddit insights, suitable for dashboards, alerts, reports, or downstream automation.**",
+        "height": 320,
+        "width": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        576,
+        48
+      ],
+      "typeVersion": 1,
+      "id": "544a08d7-92c8-401d-908c-e0b055b72a83",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-robotics-er-1.5-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-robotics-er-1.5-preview"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Decide whether a reddit post is about n8n.io, a workflow automation low code tool that can be self-hosted, or not.\nReddit Post: {{ $json.selftextTrimmed }}\nAbout n8n?: Yes/No"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -688,
+        160
+      ],
+      "id": "8ef54d00-fef0-42ed-9c44-83b85022e061",
+      "name": "AI Relevance Classifier",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "8GrNbFbvt7yPLSlm",
+          "name": "Google Gemini(PaLM) Api account 6"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-robotics-er-1.5-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-robotics-er-1.5-preview"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Summarise what this is talking about in a meta way in only 1 sentence.\n\n {{ $json.selftextTrimmed }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        16,
+        160
+      ],
+      "id": "6bbc1c8a-cbd5-4d0b-b99d-3980a86c1344",
+      "name": "AI Insight Summarization",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "kBPQElGFvlUh8cf0",
+          "name": "Google Gemini(PaLM) Api account 4"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking \"Execute Workflow\"": {
+      "main": [
+        [
+          {
+            "node": "Fetch Recent Reddit Discussions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Recent Reddit Discussions": {
+      "main": [
+        [
+          {
+            "node": "Filter High-Quality & Recent Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter High-Quality & Recent Posts": {
+      "main": [
+        [
+          {
+            "node": "Normalize Reddit Post Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Reddit Post Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Classification with Post Data",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "AI Relevance Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Classification with Post Data": {
+      "main": [
+        [
+          {
+            "node": "Is Post Relevant?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Post Relevant?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Merge Summary with Metadata",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "AI Insight Summarization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Summary with Metadata": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Structured Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Relevance Classifier": {
+      "main": [
+        [
+          {
+            "node": "Merge Classification with Post Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Insight Summarization": {
+      "main": [
+        [
+          {
+            "node": "Merge Summary with Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4e9697a1-1d65-4e7c-941b-6b1c3374b4f5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "df9e926e4db944a4b8e5dbae635b7c198e7118577d93d38bd64b1952645ba4f0"
+  },
+  "id": "Ha5y3pxzwe5dardu",
+  "tags": [
+    {
+      "updatedAt": "2026-01-10T06:33:32.574Z",
+      "createdAt": "2026-01-10T06:33:32.574Z",
+      "id": "8jDT2j8FrQOpgnSD",
+      "name": "Business Operations"
+    },
+    {
+      "updatedAt": "2026-01-10T09:14:17.880Z",
+      "createdAt": "2026-01-10T09:14:17.880Z",
+      "id": "BJNoNx1893doyS6Q",
+      "name": "Market Research"
+    },
+    {
+      "updatedAt": "2026-01-10T09:15:13.849Z",
+      "createdAt": "2026-01-10T09:15:13.849Z",
+      "id": "PzEthpOdFNpL6K6Z",
+      "name": "Community Insights"
+    },
+    {
+      "updatedAt": "2026-01-10T09:15:20.525Z",
+      "createdAt": "2026-01-10T09:15:20.525Z",
+      "id": "UVIfALSddBf0POTU",
+      "name": "AI Automation"
+    }
+  ]
+}
